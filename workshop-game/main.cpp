@@ -10,6 +10,7 @@
 #include "GLFW/glfw3.h"
 #include "draw_game.h"
 
+
 #include "box2d/box2d.h"
 
 // GLFW main window pointer
@@ -91,6 +92,26 @@ int main()
     b2BodyDef ground_bd;
     ground = g_world->CreateBody(&ground_bd);
     ground->CreateFixture(&ground_shape, 0.0f);
+
+    //Jonathans Dominos
+
+    b2PolygonShape shape;
+    shape.SetAsBox(0.1f, 1.0f);
+
+    b2FixtureDef fd;
+    fd.shape = &shape;
+    fd.density = 20.0f;
+    fd.friction = 0.1f;
+
+    for (int i = 0; i < 10; ++i)
+    {
+        b2BodyDef bd;
+        bd.type = b2_dynamicBody;
+        bd.position.Set(-5.0f + 1.0f * i, 0.01f);
+        b2Body* body = g_world->CreateBody(&bd);
+        body->SetAngularVelocity(1.0f);
+        body->CreateFixture(&fd);
+    }
 
     b2Body* box;
     b2PolygonShape box_shape;
