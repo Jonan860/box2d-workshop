@@ -44,6 +44,20 @@ void MouseButtonCallback(GLFWwindow* window, int32 button, int32 action, int32 m
     // now convert this position to Box2D world coordinates
     b2Vec2 pw = g_camera.ConvertScreenToWorld(ps);
 
+    if (action == GLFW_PRESS) {
+        b2Body* box;
+        b2PolygonShape box_shape;
+        box_shape.SetAsBox(1.0f, 1.0f);
+        b2FixtureDef box_fd;
+        box_fd.shape = &box_shape;
+        box_fd.density = 20.0f;
+        box_fd.friction = 0.1f;
+        b2BodyDef box_bd;
+        box_bd.type = b2_dynamicBody;
+        box_bd.position.Set(pw.x, pw.y);
+        box = g_world->CreateBody(&box_bd);
+        box->CreateFixture(&box_fd);
+    }
 }
 
 int main()
