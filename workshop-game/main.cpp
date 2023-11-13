@@ -12,6 +12,7 @@
 
 
 #include "box2d/box2d.h"
+#include <set>
 
 // GLFW main window pointer
 GLFWwindow* g_mainWindow = nullptr;
@@ -140,6 +141,8 @@ int main()
     box = g_world->CreateBody(&box_bd);
     box->CreateFixture(&box_fd);
 
+    std::set<b2Body*> to_delete;
+    
 
     // This is the color of our background in RGB components
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -183,7 +186,28 @@ int main()
         // When we call Step(), we run the simulation for one frame
         float timeStep = 60 > 0.0f ? 1.0f / 60 : float(0.0f);
         g_world->Step(timeStep, 8, 3);
+        
+        for (b2Body* b = g_world->GetBodyList(); b; b = b->GetNext())
+        {
+            if (b->GetType() == b2_dynamicBody)
+            {
+                b2ContactEdge* edge = b->GetContactList();
+                while (edge != nullptr) {
+                    if (edge->contact->IsTouching()) {
+                        if (edge->other->GetType() == b2_dynamicBody) {
+                            to_delete.insert(edge->other);
+                        }
+                    }
+                    edge = edge->next;
+                }
+            }
+        }
 
+        for (auto element : to_delete) {
+           g_world->DestroyBody(element);
+        }
+        to_delete.clear();
+      
         // Render everything on the screen
         g_world->DebugDraw();
         g_debugDraw.Flush();
@@ -211,6 +235,7 @@ int main()
         // Compute the sleep adjustment using a low pass filter
         sleepAdjust = 0.9 * sleepAdjust + 0.1 * (target - frameTime);
 
+        
     }
 
     // Terminate the program if it reaches here

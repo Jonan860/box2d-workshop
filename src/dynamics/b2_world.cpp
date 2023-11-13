@@ -39,6 +39,7 @@
 #include "box2d/b2_world.h"
 
 #include <new>
+#include <set>
 
 b2World::b2World(const b2Vec2& gravity)
 {
@@ -914,6 +915,8 @@ void b2World::Step(float dt, int32 velocityIterations, int32 positionIterations)
 	}
 
 	m_locked = true;
+
+	
 
 	b2TimeStep step;
 	step.dt = dt;
