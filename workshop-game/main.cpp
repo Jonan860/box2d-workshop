@@ -19,6 +19,7 @@
 GLFWwindow* g_mainWindow = nullptr;
 
 b2World* g_world;
+std::set<b2Body*> to_delete;
 
 class Character {
 public:
@@ -38,16 +39,45 @@ public:
         body = g_world->CreateBody(&box_bd);
         body->CreateFixture(&box_fd);
     }
+
+    void OnCollision(const Character* other)
+    {
+        if (other->size > size) {
+            shouldDelete = true;
+        }
+    }
+
     virtual Character::~Character()
     {
         g_world->DestroyBody(body);
     }
+    bool shouldDelete = false;
 private:
     int size;
     b2Body* body;
 };
 
 std::vector<std::unique_ptr<Character>> characters;
+
+class MyCollisionListener : public b2ContactListener {
+public: 
+    void BeginContact(b2Contact* contact) override
+    {
+        if (
+            contact->GetFixtureA()->GetBody()->GetUserData().pointer == NULL
+            || contact->GetFixtureB()->GetBody()->GetUserData().pointer == NULL
+        ) 
+        {
+            return;
+        }
+        Character* character1 = (Character*)contact->GetFixtureA()->GetBody()->GetUserData().pointer;
+        Character* character2 = (Character*)contact->GetFixtureB()->GetBody()->GetUserData().pointer;
+        
+        character1->OnCollision(character2);
+        character2->OnCollision(character1);
+    }
+};
+
 
 void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
@@ -91,8 +121,6 @@ void MouseButtonCallback(GLFWwindow* window, int32 button, int32 action, int32 m
         box->CreateFixture(&box_fd);*/
     }
 }
-
-
 
 
 
@@ -176,8 +204,10 @@ int main()
     box = g_world->CreateBody(&box_bd);
     box->CreateFixture(&box_fd);
 
-    std::set<b2Body*> to_delete;
     
+
+    MyCollisionListener collision;
+    g_world->SetContactListener(&collision);
 
     // This is the color of our background in RGB components
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -222,6 +252,13 @@ int main()
         float timeStep = 60 > 0.0f ? 1.0f / 60 : float(0.0f);
         g_world->Step(timeStep, 8, 3);
         
+        characters.erase(
+            std::remove_if(characters.begin(), characters.end(), [](const auto& character) {
+                return character->shouldDelete;
+                }),
+            characters.end()
+        );
+
         for (b2Body* b = g_world->GetBodyList(); b; b = b->GetNext())
         {
             if (b->GetType() == b2_dynamicBody)
