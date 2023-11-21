@@ -9,7 +9,7 @@
 #include "glad/gl.h"
 #include "GLFW/glfw3.h"
 #include "draw_game.h"
-
+#include <cstdlib>
 
 #include "box2d/box2d.h"
 #include <set>
@@ -20,6 +20,63 @@ GLFWwindow* g_mainWindow = nullptr;
 
 b2World* g_world;
 std::set<b2Body*> to_delete;
+
+
+class GameObject
+{
+public:
+    GameObject(b2Body* body_p) : body(body_p) {};
+    GameObject::~GameObject()
+    {
+        if (body != nullptr) {
+            g_world->DestroyBody(body);
+        }
+    }
+
+    virtual void Update() = 0;
+    virtual void OnKeyPress(int key, int scancode, int action, int mods) = 0;
+    virtual void OnMousePress(int x, int y) = 0;
+
+    
+    bool ShouldDelete() const
+    {
+        return shouldDelete;
+    }
+protected:
+    b2Body* GetBody() const;
+    bool shouldDelete = false;
+
+private:
+    b2Body* body;
+};
+
+std::vector<std::unique_ptr<GameObject>> all_objects;
+
+
+b2Body* GameObject::GetBody() const
+{
+    return body;
+}
+
+class Square : public GameObject
+{
+public:
+    Square(b2Body* body_p) : GameObject(body_p) {}
+    virtual ~Square() = default;
+    virtual void OnMousePress(int x, int y) override {};
+    virtual void Update() override {};
+
+    void OnKeyPress(int key, int scancode, int action, int mods) override
+    {
+        if (key == GLFW_KEY_UP) 
+        {
+            b2Vec2 velocityVector = GetBody()->GetLinearVelocity();
+            if (std::abs(velocityVector.x) + std::abs(velocityVector.y) < 0.1) {
+                GetBody()->ApplyLinearImpulseToCenter(b2Vec2(0.0f, 500.0f), true);
+            }
+        }
+    }
+};
 
 class Character {
 public:
@@ -81,8 +138,11 @@ public:
 
 void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-    // code for keys here https://www.glfw.org/docs/3.3/group__keys.html
-    // and modifiers https://www.glfw.org/docs/3.3/group__mods.html
+    for (auto& game_object : all_objects) {
+        // code for keys here https://www.glfw.org/docs/3.3/group__keys.html
+        // and modifiers https://www.glfw.org/docs/3.3/group__mods.html
+        game_object->OnKeyPress(key, scancode, action, mods);
+    }
 }
 
 void MouseMotionCallback(GLFWwindow*, double xd, double yd)
@@ -200,10 +260,13 @@ int main()
     box_fd.friction = 0.1f;
     b2BodyDef box_bd;
     box_bd.type = b2_dynamicBody;
-    box_bd.position.Set(-5.0f, 11.25f);
+    box_bd.position.Set(8.0f, 11.25f);
     box = g_world->CreateBody(&box_bd);
     box->CreateFixture(&box_fd);
 
+    //std::make_unique<Square>(box);
+    
+    all_objects.push_back(std::make_unique<Square>(box));
     
 
     MyCollisionListener collision;
@@ -274,6 +337,12 @@ int main()
                 }
             }
         }
+       /* all_objects.erase(
+            std::remove_if(
+                all_objects.begin(), all_objects.end()
+                , [](const std::unique_ptr<GameObject> object) {return object->ShouldDelete(); })
+                , all_objects.end()
+            );*/
 
         for (auto element : to_delete) {
            g_world->DestroyBody(element);
