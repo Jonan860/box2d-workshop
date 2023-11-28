@@ -23,12 +23,17 @@
 class GameObject;
 class Obstacle;
 
-
+enum PHASES {
+    GAME_ONGOING,
+    LOSS
+};
 class TheGame {
 public:
     const float PIXELS_PER_UNIT = 20.0f;
-    float roomHeight = g_camera.m_height / PIXELS_PER_UNIT;
+    float roomHeight = g_camera.m_height / PIXELS_PER_UNIT + 5.0f;
     float roomWidth = g_camera.m_height / PIXELS_PER_UNIT;
+    int score;
+    PHASES phase = GAME_ONGOING;
     GLFWwindow* g_mainWindow = nullptr;
     b2World* world = nullptr;// g_world;
     std::set<b2Body*> to_delete;
@@ -58,16 +63,19 @@ public:
     }
 
     void CreateObstacles() {
+        score += 1;
         generateNewGap();
         
         createObstacle(0.0f, obstacleGapFloor);
-        createObstacle(obstacleGapCeil, roomHeight + 5.0f);
+        createObstacle(obstacleGapCeil, roomHeight);
     }
     void Update() {
-        stepsUntilNextObstacleCreation -= 1;
-        if (stepsUntilNextObstacleCreation == 0) {
-            stepsUntilNextObstacleCreation = stepsBetweenObstaclesCreation;
-            CreateObstacles();
+        if (phase == GAME_ONGOING) {
+            stepsUntilNextObstacleCreation -= 1;
+            if (stepsUntilNextObstacleCreation == 0) {
+                stepsUntilNextObstacleCreation = stepsBetweenObstaclesCreation;
+                CreateObstacles();
+            }
         }
     }
 };
@@ -76,8 +84,8 @@ TheGame theGame;
 class GameObject
 {
 public:
-    GameObject(b2Body* body_p) : body(body_p) {};
-    GameObject::~GameObject()
+    GameObject(b2Body* body_p) : body(body_p) {}
+    virtual ~GameObject()
     {
         if (body != nullptr) {
             theGame.world->DestroyBody(body);
@@ -109,7 +117,7 @@ public:
     virtual void OnMousePress(int x, int y) override {};
     virtual void OnKeyPress(int key, int scancode, int action, int mods) override {};
     virtual void Update() override {
-        if (GetBody()->GetPosition().x <= -30) {
+        if (GetBody()->GetPosition().x <= -42) {
             shouldDelete = true;
         }
     };
@@ -123,10 +131,17 @@ b2Body* GameObject::GetBody() const
 class Square : public GameObject
 {
 public:
-    Square(b2Body* body_p) : GameObject(body_p) {}
-    virtual ~Square() = default;
+    Square(b2Body* body_p) : GameObject(body_p) {};
+    virtual ~Square() override {
+        theGame.phase = LOSS;
+    };
     virtual void OnMousePress(int x, int y) override {};
-    virtual void Update() override {};
+    virtual void Update() override {
+        b2Vec2 position = GetBody()->GetPosition();
+        if (position.x < -42.0f || position.x > theGame.roomWidth) {
+            shouldDelete = true;
+        }
+    };
 
     void OnKeyPress(int key, int scancode, int action, int mods) override
     {
@@ -201,16 +216,20 @@ public:
 
 void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-    float grav = 0.0f;
+    float grav = 0.1f;
     switch (key) {
     case GLFW_KEY_1 :
-        grav = 1.0f; break;
+        grav = 0.0f; break;
     case GLFW_KEY_2 :
+        grav = 5.0f; break;
+    case GLFW_KEY_3 :
         grav = 10.0f; break;
-    case GLFW_KEY_3:
+    case GLFW_KEY_4 :
         grav = 20.0f; break;
+    case GLFW_KEY_5 :
+        grav = 100.0f; break;
     }
-    if (grav != 0.0f) {
+    if (grav != 0.1f) {
         theGame.world->SetGravity(b2Vec2(0.0f, -grav));
     }
     for (auto& game_object : theGame.all_objects) {
@@ -305,6 +324,13 @@ int main()
     b2BodyDef ground_bd;
     ground = theGame.world->CreateBody(&ground_bd);
     ground->CreateFixture(&ground_shape, 0.0f);
+
+    b2Body* roof;
+    b2EdgeShape roof_shape;
+    roof_shape.SetTwoSided(b2Vec2(-40.0f, theGame.roomHeight), b2Vec2(40.0f, theGame.roomHeight));
+    b2BodyDef roof_bd;
+    roof = theGame.world->CreateBody(&roof_bd);
+    roof->CreateFixture(&roof_shape, theGame.roomHeight);
 
     //Jonathans Dominos
 
@@ -413,18 +439,21 @@ int main()
                 }
             }
         }
-       /* all_objects.erase(
+
+        
+        theGame.all_objects.erase(
             std::remove_if(
-                all_objects.begin(), all_objects.end()
-                , [](const std::unique_ptr<GameObject> object) {return object->ShouldDelete(); })
-                , all_objects.end()
-            );*/
+                theGame.all_objects.begin(), theGame.all_objects.end()
+                , [](const std::unique_ptr<GameObject>& object) {return object->ShouldDelete(); })
+                , theGame.all_objects.end()
+            );
 
         for (auto element : theGame.to_delete) {
            theGame.world->DestroyBody(element);
         }
         theGame.to_delete.clear();
-      
+        
+        g_debugDraw.DrawString(5, 5, "Score : %d", theGame.score);
         // Render everything on the screen
         theGame.world->DebugDraw();
         g_debugDraw.Flush();
@@ -451,8 +480,11 @@ int main()
 
         // Compute the sleep adjustment using a low pass filter
         sleepAdjust = 0.9 * sleepAdjust + 0.1 * (target - frameTime);
-
+        
         theGame.Update();
+        for (auto& object : theGame.all_objects) {
+            object->Update();
+        }
     }
 
     // Terminate the program if it reaches here
